@@ -1,202 +1,167 @@
- <?php
+<?php
 
-$host="localhost";
-$usuario="root";
-$password="";
-$basededatos="api";
+$host = "localhost";
+$usuario = "root";
+$password = "";
+$basededatos = "api";
 
-//Prueba de conexion
-
+// Conexión a la base de datos
 $conn = mysqli_connect($host, $usuario, $password, $basededatos);
 
-//Chequear la conexion
-if(!$conn){
-    die("conexion fallida:" . mysqli_connect_error());
+// Chequear la conexión
+if (!$conn) {
+    die("Conexión fallida: " . mysqli_connect_error());
 }
-/*echo "Conectado correctamente a MySQL";
-mysqli_close($conn);*/
 
+// Establecer el encabezado de respuesta como JSON
 header("Content-Type: application/json");
-$metodo = $_SERVER[ "REQUEST_METHOD" ];
-//print_r($metodo); 
 
-//buscar la URL de nuestra API con el id respectivo
-$path = isset($_SERVER['PATH_INFO']) ? $_SERVER['path_info'] : '/';
+// Obtener el método de la solicitud
+$metodo = $_SERVER["REQUEST_METHOD"];
+
+// Obtener el ID de la URL si está presente
+$path = isset($_SERVER['PATH_INFO']) ? $_SERVER['PATH_INFO'] : '/';
 $buscarID = explode('/', $path);
-$id = ($path!='/') ? end($buscarID):null;
+$id = ($path != '/') ? end($buscarID) : null;
 
-switch($metodo){
-    //select
+// Manejar la solicitud según el método
+switch ($metodo) {
     case 'GET':
-       /* echo "Consulta de Registros - GET";*/
+        // Consultar usuarios
         consultar($conn, $id);
         break;
-    //INSERTAR
-    case "POST":
-       /* echo"Insertar Registros - POST";*/
+    case 'POST':
+        // Insertar un nuevo usuario
         insertar($conn);
         break;
-    //UPDATE
     case 'PUT':
-        /*echo "Edición de Registros - PUT";*/
+        // Actualizar un usuario existente
         actualizar($conn, $id);
         break;
-    //DELETE 
     case 'DELETE':
-       /* echo "Eliminación de Registro - DELETE";*/
-        borrar($conn,$id); 
+        // Borrar un usuario existente
+        borrar($conn, $id);
         break;
     default:
-        echo "Método no permitido";
+        // Método no permitido
+        echo json_encode(array("error" => "Método no permitido"));
         break;
 }
-function consultar($conn, $id){
-    //$sql = "SELECT * from usuarios"; /*si busco por usuario uo esta */
-    $sql = ($id===null) ? "SELECT * from usuarios": "SELECT * from usuarios where id =$id";
+
+// Función para consultar usuarios
+function consultar($conn, $id)
+{
+    $sql = ($id !== null) ? "SELECT * FROM usuarios WHERE id = $id" : "SELECT * FROM usuarios";
     $resultado = $conn->query($sql);
 
-    if($resultado){
+    if ($resultado) {
         $datos = array();
-        while($fila = $resultado->fetch_assoc()){
+        while ($fila = $resultado->fetch_assoc()) {
             $datos[] = $fila;
         }
         echo json_encode($datos);
+    } else {
+        echo json_encode(array("error" => "Error al consultar usuarios: " . mysqli_error($conn)));
     }
-
 }
 
-function insertar($conn) {
-    // Obtener datos del cuerpo de la solicitud en formato JSON
+// Función para insertar un usuario
+function insertar($conn)
+{
     $dato = json_decode(file_get_contents("php://input"), true);
+    $id = isset($dato["id"]) ? (int)$dato["id"] : null;
+    $nombre = isset($dato["nombre"]) ? mysqli_real_escape_string($conn, $dato["nombre"]) : '';
 
-    // Verificar si se proporciona el nombre del usuario
-    if (isset($dato["nombre"])) {
-        // Escapar el nombre del usuario para prevenir la inyección SQL
-        $nombre = mysqli_real_escape_string($conn, $dato["nombre"]);
+    if ($id !== null && $nombre !== '') {
+        $sql = "INSERT INTO usuarios(id, nombre) VALUES ($id, '$nombre')";
+        $resultado = $conn->query($sql);
 
-        // Construir la consulta SQL para insertar el nuevo usuario
-        $sql = "INSERT INTO usuarios(nombre) VALUES ('$nombre')";
+        if ($resultado) {
+            echo json_encode(array("id" => $id));
+        } else {
+            echo json_encode(array("error" => "Error al insertar el usuario: " . mysqli_error($conn)));
+        }
+    } else {
+        echo json_encode(array("error" => "ID o nombre de usuario no proporcionado"));
+    }
+}
+
+// Función para actualizar un usuario
+function actualizar($conn, $id)
+{
+    // Obtener los datos del cuerpo de la solicitud en formato JSON
+    $data = json_decode(file_get_contents("php://input"), true);
+
+    // Verificar si se proporcionó el ID y los nuevos datos
+    if (isset($data['id']) && isset($data['nuevosDatos'])) {
+        $id = $data['id'];
+        $nuevosDatos = $data['nuevosDatos'];
+
+        // Construir la consulta SQL para actualizar los datos del usuario
+        $sets = [];
+        foreach ($nuevosDatos as $campo => $valor) {
+            $sets[] = "$campo = '$valor'";
+        }
+        $setString = implode(', ', $sets);
+        $sql = "UPDATE usuarios SET $setString WHERE id = $id";
 
         // Ejecutar la consulta SQL
         $resultado = $conn->query($sql);
 
-        // Comprobar si la inserción fue exitosa
+        // Verificar si se actualizó el usuario correctamente
         if ($resultado) {
-            // Obtener el ID del usuario recién insertado
-            $id_insertado = $conn->insert_id;
-            // Construir una respuesta JSON con el ID del nuevo usuario
-            echo json_encode(array("id" => $id_insertado));
+            echo json_encode(array("mensaje" => "Usuario actualizado correctamente"));
         } else {
-            // En caso de error en la consulta SQL, devolver un mensaje de error
-            echo json_encode(array("error" => "Error al insertar el usuario: " . mysqli_error($conn)));
+            echo json_encode(array("error" => "Error al actualizar el usuario: " . mysqli_error($conn)));
         }
     } else {
-        // Si no se proporciona el nombre del usuario, devolver un mensaje de error
-        echo json_encode(array("error" => "Nombre de usuario no proporcionado"));
+        echo json_encode(array("error" => "ID o nuevos datos no proporcionados"));
     }
 }
 
-/*function insertar($conn){
 
-    $dato = json_decode(file_get_contents("php://input"),true);
-    $nombre = isset($dato["nombre"]) ? mysqli_real_escape_string($conn, $dato["nombre"]) : '';
-    // borrar
-    /*if(array_key_exists("nombre", $dato)){
-        $nombre=$dato["nombre"];
-    }else{
-        $nombre= " ";
-    }*/
-    //borrar
-
-   /* $sql = "INSERT INTO usuarios(nombre) VALUES ('$nombre')";
-    $resultado = $conn-> query ($sql);
-
-    if($resultado){
-        $dato["id"] = $conn->insert_id;
-        echo json_encode($dato);
-    }else{
-        echo json_encode(array("error"=>"Error al crear usuario"));
+// Función para borrar un usuario
+/*function borrar($conn, $id)
+{
+    // Verificar si se proporcionó el ID
+    if ($id !== null) {
+        // Usar una consulta preparada para evitar inyección SQL
+        $sql = "DELETE FROM usuarios WHERE id = ?";
+        
+        // Preparar la consulta
+        $stmt = $conn->prepare($sql);
+        
+        if ($stmt) {
+            // Vincular el parámetro
+            $stmt->bind_param("i", $id);
+            
+            // Ejecutar la consulta
+            if ($stmt->execute()) {
+                echo json_encode(array("mensaje" => "Usuario eliminado correctamente"));
+            } else {
+                echo json_encode(array("error" => "Error al eliminar el usuario: " . $stmt->error));
+            }
+            
+            // Cerrar la declaración preparada
+            $stmt->close();
+        } else {
+            // Si no se pudo preparar la consulta
+            echo json_encode(array("error" => "Error al preparar la consulta: " . $conn->error));
+        }
+    } else {
+        // Si no se proporcionó el ID de usuario
+        echo json_encode(array("error" => "ID de usuario no proporcionado"));
     }
 }*/
-
-/*
 function borrar($conn,$id){
-
     echo "el id a borrar es: ". $id;
-
     $sql="DELETE FROM usuarios where id= $id ";
     $resultado = $conn->query($sql);
-
     if($resultado){
-        echo json_encode(array("Mensaje"=>"Usuario borrado corectamente"));
+        echo json_encode(array("Mensaje"=>"Usuario borrado correctamente"));
     }else{
         echo json_encode(array("error"=>"Error al borrar usuario"));
     }
 }
-*/
-function borrar($conn, $id) {
-    // Construir la consulta SQL para eliminar el usuario con el ID proporcionado
-    $sql = "DELETE FROM usuarios WHERE id = $id";
 
-    // Ejecutar la consulta SQL
-    $resultado = $conn->query($sql);
-
-    // Comprobar si la eliminación fue exitosa
-    if ($resultado) {
-        // Construir una respuesta JSON con un mensaje de éxito
-        echo json_encode(array("mensaje" => "Usuario eliminado correctamente"));
-    } else {
-        // En caso de error en la consulta SQL, devolver un mensaje de error
-        echo json_encode(array("error" => "Error al eliminar el usuario: " . mysqli_error($conn)));
-    }
-}
-
-
-/*
-function actualizar($conn, $id){
-
-    $dato = json_decode(file_get_contents("php://input"),true);
-    $nombre = isset($dato["nombre"]) ? mysqli_real_escape_string($conn, $dato["nombre"]) : '';
-
-        echo "El ida editar es: ".$id. "con el dato ".$nombre;
-
-        $sql="UPDATE usuarios SET nombre = '$nombre' WHERE id = $id";
-        $resultado = $conn->query($sql);
-
-    if($resultado){
-        echo json_encode(array("Mensaje"=>"Datos Usuario Actualizados"));
-    }else{
-        echo json_encode(array("error"=>"No se pudo actualizar los datos"));
-       
-    }
-}
-*/
-function actualizar($conn, $id) {
-    // Obtener datos del cuerpo de la solicitud en formato JSON
-    $dato = json_decode(file_get_contents("php://input"), true);
-
-    // Verificar si se proporciona el nombre del usuario
-    if (isset($dato["nombre"])) {
-        // Escapar el nombre del usuario para prevenir la inyección SQL
-        $nombre = mysqli_real_escape_string($conn, $dato["nombre"]);
-
-        // Construir la consulta SQL para actualizar el nombre del usuario
-        $sql = "UPDATE usuarios SET nombre = '$nombre' WHERE id = $id";
-
-        // Ejecutar la consulta SQL
-        $resultado = $conn->query($sql);
-
-        // Comprobar si la actualización fue exitosa
-        if ($resultado) {
-            // Construir una respuesta JSON con un mensaje de éxito
-            echo json_encode(array("mensaje" => "Usuario actualizado correctamente"));
-        } else {
-            // En caso de error en la consulta SQL, devolver un mensaje de error
-            echo json_encode(array("error" => "Error al actualizar el usuario: " . mysqli_error($conn)));
-        }
-    } else {
-        // Si no se proporciona el nombre del usuario, devolver un mensaje de error
-        echo json_encode(array("error" => "Nombre de usuario no proporcionado"));
-    }
-}
-
+?>
