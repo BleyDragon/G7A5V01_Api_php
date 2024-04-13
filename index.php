@@ -155,7 +155,7 @@ function actualizar($conn, $id)
 }*/
 function borrar($conn,$id){
     echo "el id a borrar es: ". $id;
-    $sql="DELETE FROM usuarios where id= $id ";
+    $sql="DELETE FROM usuarios where id= $id";
     $resultado = $conn->query($sql);
     if($resultado){
         echo json_encode(array("Mensaje"=>"Usuario borrado correctamente"));
